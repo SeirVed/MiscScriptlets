@@ -56,6 +56,13 @@ class StubIntegration(unittest.TestCase):
                 'modules.scripts':scripts,'modules.script_callbacks':callbacks,'modules.script_loading':script_loading}):
                 spec=importlib.util.spec_from_file_location('_stub_test_resumable',EXT/'scripts'/'resumable_xyz.py')
                 module=importlib.util.module_from_spec(spec);spec.loader.exec_module(module)
+                # Stability Matrix's Packages directory implies the shared Images root.
+                library = Path(temp)/'SM library'
+                package_root = library/'Packages'/'Forge Neo'
+                package_root.mkdir(parents=True)
+                with patch.object(paths, 'data_path', str(package_root)):
+                    self.assertEqual(module._choose_jobs_dir(), library/'Images'/'ResumableXYZ')
+                # Existing jobs remain discoverable through legacy lookup.
                 class P:
                     def __init__(self):
                         self.batch_size=1;self.n_iter=1;self.prompt='test prompt';self.negative_prompt='';self.seed=-1;self.subseed=-1
