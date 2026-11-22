@@ -8,6 +8,7 @@ from __future__ import annotations
 import importlib.util
 import logging
 import json
+import os
 import random
 import sys
 from copy import copy
@@ -41,7 +42,55 @@ from xyz_resume_core import (
 )
 
 log = logging.getLogger('resumable-xyz')
-JOBS_DIR = Path(paths.data_path) / 'outputs' / 'resumable_xyz'
+
+
+def _choose_jobs_dir():
+    """Prefer Stability Matrix's common Images library over package-local output(s)."""
+    override = os.environ.get('RESUMABLE_XYZ_OUTPUT_DIR', '').strip()
+    if override:
+        return Path(os.path.expandvars(override)).expanduser().resolve()
+    data = Path(paths.data_path).resolve()
+    # Stability Matrix keeps packages in <library>/Packages/<package>.
+    # Detect this structure instead of hard-coding a drive or installation name.
+    for folder in (data, *data.parents):
+        if folder.name.casefold() == 'packages':
+            return folder.parent / 'Images' / 'ResumableXYZ'
+    # Standalone Forge Neo: honour its configured txt2img output folder.
+    raw = (getattr(shared.opts, 'outdir_samples', None) or
+           getattr(shared.opts, 'outdir_txt2img_samples', None))
+    if raw:
+        configured = Path(os.path.expandvars(str(raw))).expanduser()
+        if not configured.is_absolute():
+            configured = data / configured
+        return configured.parent / 'resumable_xyz'
+    return data / 'output' / 'resumable_xyz'
+
+
+JOBS_DIR = _choose_jobs_dir()
+# Keep already-running jobs in their original location; never move, overwrite,
+# or silently start again when a previous checkpoint directory exists.
+LEGACY_JOB_ROOTS = [
+    Path(paths.data_path) / 'outputs' / 'resumable_xyz',
+    Path(paths.data_path) / 'output' / 'resumable_xyz',
+]
+
+
+def _job_location(name):
+    for root in (JOBS_DIR, *LEGACY_JOB_ROOTS):
+        job = root / name
+        if (job / 'manifest.json').is_file():
+            return job
+    return JOBS_DIR / name
+
+
+def _viewer_url(job_dir, name):
+    roots = [('/resumable-xyz', JOBS_DIR),
+             ('/resumable-xyz-old-outputs', LEGACY_JOB_ROOTS[0]),
+             ('/resumable-xyz-old-output', LEGACY_JOB_ROOTS[1])]
+    for route, root in roots:
+        if job_dir == root / name:
+            return f'{route}/{name}/viewer.html'
+    return str(job_dir / 'viewer.html')
 
 
 def _get_native():
@@ -158,15 +207,22 @@ def _image_result(p, previews, summary):
 
 
 def _register_static_files(_demo, app):
-    # Accessible only through the existing Forge Neo server and its chosen auth/network settings.
+    # Accessible through the existing Forge Neo server and its network settings.
     try:
         from starlette.staticfiles import StaticFiles
         JOBS_DIR.mkdir(parents=True, exist_ok=True)
-        if not any(getattr(route, 'path', None) == '/resumable-xyz' for route in app.routes):
-            app.mount('/resumable-xyz', StaticFiles(directory=str(JOBS_DIR), html=True), name='resumable-xyz')
-            log.info('Resumable XYZ viewer available at /resumable-xyz/<job>/viewer.html')
+        mounts = [('/resumable-xyz', JOBS_DIR),
+                  ('/resumable-xyz-old-outputs', LEGACY_JOB_ROOTS[0]),
+                  ('/resumable-xyz-old-output', LEGACY_JOB_ROOTS[1])]
+        for url, folder in mounts:
+            # Old roots are optional and should not be created merely for viewing.
+            if folder != JOBS_DIR and not folder.is_dir():
+                continue
+            if not any(getattr(route, 'path', None) == url for route in app.routes):
+                app.mount(url, StaticFiles(directory=str(folder), html=True), name=url.strip('/'))
+        log.info('Resumable XYZ output root: %s', JOBS_DIR)
     except Exception:
-        log.exception('Cannot mount Resumable XYZ viewer route; file:// viewer.html still works')
+        log.exception('Cannot mount Resumable XYZ viewer; file:// viewer.html still works')
 
 
 script_callbacks.on_app_started(_register_static_files)
@@ -228,7 +284,7 @@ class Script(scripts.Script):
             if not job_name or str(job_name).strip().lower() == 'auto':
                 raise ValueError('Assemble only: enter the original explicit job name, or the auto-generated xyz-XXXXXXXXXXXX folder name.')
             title = safe_name(job_name)
-            job_dir = JOBS_DIR / title
+            job_dir = _job_location(title)
             manifest = load_manifest(job_dir)
             viewer = generate_viewer(job_dir, manifest)
             previews = build_previews(job_dir,manifest) if make_previews else []
@@ -237,7 +293,7 @@ class Script(scripts.Script):
             total = len(axes['x']['values'])*len(axes['y']['values'])*len(axes['z']['values'])
             done = saved_count(job_dir,manifest)
             summary = (f'Reassembled {done}/{total} cells without generation. Viewer: {viewer}. '
-                       f'LAN viewer: /resumable-xyz/{title}/viewer.html. Mosaic tiles: {len(tiles)}.')
+                       f'LAN viewer: {_viewer_url(job_dir, title)}. Mosaic tiles: {len(tiles)}.')
             log.info(summary)
             return _image_result(p,previews,summary)
 
@@ -255,7 +311,7 @@ class Script(scripts.Script):
         cfg = _config(p, raw, names, shared.opts)
         digest = signature(cfg)
         title = ('xyz-'+digest[:12]) if str(job_name).strip().lower() in ('auto','') else safe_name(job_name)
-        job_dir = JOBS_DIR / title
+        job_dir = _job_location(title)
         job_dir.mkdir(parents=True, exist_ok=True)
         manifest_file = job_dir / 'manifest.json'
 
@@ -362,7 +418,7 @@ class Script(scripts.Script):
         done = saved_count(job_dir,manifest)
         summary = (f'Resumable XYZ: {done}/{total} cells saved. {failed_this_run} failures this run. '
                    f'Job: {job_dir}. Viewer: {viewer}. '
-                   f'LAN viewer: /resumable-xyz/{title}/viewer.html. '
+                   f'LAN viewer: {_viewer_url(job_dir, title)}. '
                    f'PNG mosaic tiles: {len(tiles)}. To resume: use the exact same settings/job name and Generate.')
         log.info(summary)
         return _image_result(p,previews,summary)
