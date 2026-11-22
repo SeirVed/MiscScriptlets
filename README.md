@@ -37,10 +37,10 @@ The extension does not modify Python, Torch, Polars, CUDA, or web UI core files.
 - Failures are recorded in `manifest.json` by coordinates, and shown as `FAILED` in the viewer. Use **Retry previously failed cells** to attempt them again. Otherwise they stay skipped.
 - Partial/incomplete images are deliberately *not* marked finished. A hard crash can lose the image actively being processed, but previously saved cells remain intact.
 
-The main output lives under:
+The main output uses the Stability Matrix **shared Images library** when installed under its `Packages` directory:
 
 ```text
-<Forge Neo data directory>\outputs\resumable_xyz\<job-name>\
+<Stability Matrix data directory>\Images\ResumableXYZ\<job-name>\
     manifest.json
     cells\z0000_y00000_x00000.png
     cells\z0000_y00000_x00001.png
@@ -51,7 +51,9 @@ The main output lives under:
     tiles\   (optional)
 ```
 
-By default, the Forge Neo data directory is the `StabilityMatrix_Data/Packages/Stable Diffusion WebUI Forge - Neo` folder, unless changed by your launch settings. The console log prints the exact job folder.
+This resolves to `Z:\StableDiffusion\StabilityMatrix_Data\Images\ResumableXYZ\` on the example Windows installation. For standalone Forge installs, the extension follows the configured text-to-image output directory and falls back to `output/resumable_xyz`. Optionally set the environment variable `RESUMABLE_XYZ_OUTPUT_DIR` to override the root explicitly. The console log prints the exact path.
+
+**Existing jobs:** If the same job name exists under the earlier `outputs/resumable_xyz` or `output/resumable_xyz` directory, the extension resumes it in place rather than regenerating the images. Old jobs are **not moved automatically**. For old jobs, use the viewer link printed in the job summary (`/resumable-xyz-old-outputs/` or `/resumable-xyz-old-output/`).
 
 ## Assemble gigantic plots
 
