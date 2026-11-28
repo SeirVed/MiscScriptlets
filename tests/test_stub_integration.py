@@ -36,7 +36,7 @@ class StubIntegration(unittest.TestCase):
             shared=types.ModuleType('modules.shared')
             shared.state=types.SimpleNamespace(interrupted=False,stopping_generation=False,job_count=0,job='')
             shared.opts=types.SimpleNamespace(sd_model_checkpoint='test',forge_additional_modules=[],CLIP_stop_at_last_layers=1)
-            callbacks=types.ModuleType('modules.script_callbacks');callbacks.on_app_started=lambda fn:None
+            callbacks=types.ModuleType('modules.script_callbacks');callbacks.on_app_started=lambda fn:None;callbacks.on_after_component=lambda fn:None
             script_loading=types.ModuleType('modules.script_loading')
             class AxisOption:
                 def __init__(self,label,typ,apply): self.label=label;self.type=typ;self.apply=apply;self.prepare=None;self.confirm=None;self.choices=None

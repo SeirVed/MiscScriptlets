@@ -41,6 +41,10 @@ from xyz_resume_core import (
     signature,
 )
 
+from xyz_resume_ui import add_controls, extra_settings, register_capture, restore_processing
+
+register_capture(force=True)
+
 log = logging.getLogger('resumable-xyz')
 
 
@@ -123,7 +127,7 @@ def _parse_axis(native, p, opt, text):
     if opt.prepare is not None:
         values = opt.prepare(text)
     else:
-        values = csv_values(text)
+        values = native.csv_string_to_list_strip(text) if hasattr(native, 'csv_string_to_list_strip') else csv_values(text)
     # Follow native syntax for ranges, counts, and permutation lists.
     if opt.type is int:
         expanded = []
@@ -274,10 +278,13 @@ class Script(scripts.Script):
             fill_x.click(fill_choices, inputs=x_type, outputs=x_values)
             fill_y.click(fill_choices, inputs=y_type, outputs=y_values)
             fill_z.click(fill_choices, inputs=z_type, outputs=z_values)
-        return [x_type,x_values,y_type,y_values,z_type,z_values,job_name,retry_failed,assemble_only,make_previews,make_tiles]
+        controls = [x_type,x_values,y_type,y_values,z_type,z_values,job_name,retry_failed,assemble_only,make_previews,make_tiles]
+        restore_state = add_controls(self, controls, _get_native(), opts_map, _parse_axis,
+                                    lambda: [JOBS_DIR] + list(globals().get('LEGACY_JOB_ROOTS', [])))
+        return controls + [restore_state]
 
     def run(self, p, x_type, x_values, y_type, y_values, z_type, z_values,
-            job_name, retry_failed, assemble_only, make_previews, make_tiles):
+            job_name, retry_failed, assemble_only, make_previews, make_tiles, restore_state=None):
         # Assembly-only works by job ID and does not require the original prompt,
         # model, seed, or axis fields to be restored in the UI.
         if assemble_only:
@@ -297,6 +304,7 @@ class Script(scripts.Script):
             log.info(summary)
             return _image_result(p,previews,summary)
 
+        restore_processing(p, restore_state)
         native = _get_native()
         options = _axis_option_map(self._is_img2img)
         if p.batch_size != 1 or p.n_iter != 1:
@@ -334,6 +342,11 @@ class Script(scripts.Script):
                     vals[axis] = [random.randrange(4294967294) if value == -1 else value for value in vals[axis]]
             axes = {axis:{'type':names[axis],'values':vals[axis]} for axis in 'xyz'}
             manifest = new_manifest(cfg,axes,p.seed,p.subseed)
+            manifest['ui_settings'] = {
+                'is_img2img': self._is_img2img, 'retry_failed': bool(retry_failed),
+                'make_previews': bool(make_previews), 'make_tiles': bool(make_tiles),
+                'processing': extra_settings(p),
+            }
             atomic_json(manifest_file, manifest)
         # Set progress reporting for this invocation, after counting valid files.
         already = saved_count(job_dir,manifest)

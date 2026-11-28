@@ -15,6 +15,7 @@ $dest = Join-Path $ForgeDirectory 'extensions\resumable-xyz'
 New-Item -ItemType Directory -Path (Join-Path $dest 'scripts') -Force | Out-Null
 Copy-Item -LiteralPath (Join-Path $source 'scripts\resumable_xyz.py') -Destination (Join-Path $dest 'scripts\resumable_xyz.py') -Force
 Copy-Item -LiteralPath (Join-Path $source 'xyz_resume_core.py') -Destination (Join-Path $dest 'xyz_resume_core.py') -Force
+Copy-Item -LiteralPath (Join-Path $source 'xyz_resume_ui.py') -Destination (Join-Path $dest 'xyz_resume_ui.py') -Force
 Copy-Item -LiteralPath (Join-Path $source 'README.md') -Destination (Join-Path $dest 'README.md') -Force
 Write-Host "Installed to $dest" -ForegroundColor Green
 Write-Host 'Restart Forge Neo and select Scripts > Resumable X/Y/Z Plot.'

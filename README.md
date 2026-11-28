@@ -21,13 +21,20 @@ The extension keeps **one completed image per X/Y/Z combination** in a disk-back
 2. Unzip this archive anywhere.
 3. Double-click **`install.cmd`** in the extracted folder, or in PowerShell run `powershell -ExecutionPolicy Bypass -File .\install.ps1` from that folder.
 
-   The installer targets the user's existing `Z:\StableDiffusion\StabilityMatrix_Data\Packages\Stable Diffusion WebUI Forge - Neo` directory. Override with `-ForgeDirectory 'path'` if necessary. To install manually, copy `scripts/resumable_xyz.py` and `xyz_resume_core.py` into `Forge Neo/extensions/resumable-xyz/` preserving the `scripts` subfolder.
+   The installer targets the user's existing `Z:\StableDiffusion\StabilityMatrix_Data\Packages\Stable Diffusion WebUI Forge - Neo` directory. Override with `-ForgeDirectory 'path'` if necessary. To install manually, copy `scripts/resumable_xyz.py` , `xyz_resume_core.py` and `xyz_resume_ui.py` into `Forge Neo/extensions/resumable-xyz/` preserving the `scripts` subfolder.
 4. Restart Forge Neo. Under **txt2img → Scripts**, select **Resumable X/Y/Z Plot**. The stock **X/Y/Z Plot** remains unchanged.
 5. First smoke test: `X type=Sampler`, `X values=Euler,Euler a`; `Y type=Schedule type`, `Y values=Normal,Karras`. Set **Batch size = 1** and **Batch count = 1**, and use **Generate**.
 
 The extension does not modify Python, Torch, Polars, CUDA, or web UI core files.
 
 ## Save / resume
+
+- **Reload last plot** restores the most recently updated saved manifest. **Load saved plot** restores the selected job; use **Refresh saved plots** after creating a job or adding an older one. These buttons only load settings. Press **Generate** separately to resume.
+- Loading restores the original axis text, job ID, prompt, negative prompt, styles, dimensions, sampling/seed/hires fields, checkpoint, VAE/text encoders, Clip skip and saved overrides. Model selections change in memory without saving the global options file. Batch size and count are restored to 1. The original version-1 signature checks still reject edited settings.
+- A random seed is restored as its original `-1` UI value when that is what was fingerprinted; the resolved seed remains in the manifest and is reused on resume. Loading does not overwrite manifests or cells.
+- New jobs also record optional UI metadata for retry/export controls and hires prompts/modules. Older manifests remain supported; loading reports settings they never recorded. Img2img source images and unrelated extension controls are not stored: restore those separately.
+- Each axis has a dynamic **format and example** panel. **Use example** inserts only that axis's CSV values; **Copy format** copies the verified example. Examples refresh on type, prompt or dimension changes; **Refresh example** queries the installed choices again. Sampler/scheduler/model/style choices come from their installed axis callbacks. Numeric examples use installed field/option defaults and are parsed before display; unsupported custom axes explain why no example is available.
+- **Size** derives its separator from the installed handler and tests the example through that handler on a disposable object. On the verified Forge Neo installation this is lowercase `x`, as in `512x768,768x512`. No Size list or preset is hard-coded. Current dimensions supply the example numbers.
 
 - Enter a stable **Job name** (example `sampler-scheduler-test`), or keep `auto` to compute one from the exact job settings.
 - `Generate` writes `manifest.json` before the first sample and writes each completed PNG atomically. Existing PNG files with matching job signature and coordinates are skipped.
@@ -95,11 +102,13 @@ Open Forge Neo's console for stack traces. If an existing named job reports a co
 
 ## Running the included core tests
 
-On any Python with Pillow installed:
+On a Python environment with Pillow, NumPy and Gradio installed (the Forge Neo venv already provides them):
 
 ```bash
 python -m unittest discover -s tests -v
 ```
+
+The UI tests use the installed Gradio components with isolated Forge dependencies. To additionally execute the native parser helpers and Size handler from your actual installation, set `FORGE_NEO_ROOT` to its package directory before running the suite. These checks do not generate images or start Forge Neo. A full live GPU generation test is still required to verify an end-to-end run in your installation.
 
 ### License
 
